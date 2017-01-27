@@ -160,6 +160,7 @@ end
 
 local function merge(dst,src)
   for k,v in pairs(src) do
+    v = tonumber(v) or v
     if dst[k] then
       table.insert(dst,v)
     else
@@ -206,7 +207,7 @@ local srd = P
 
   property =
 
-    Cg(( C(CapitalizedTitle) * ":" * os * C(P"(" * Name * (os * "," * os * Name)^0 * os * ")" * os * (P"->" + P"=>") * paragraph) ) / function(name,source)
+    Cg(( C(CapitalizedTitle) * ":" * C( (P(1) - (P"\n"+P"=>"+P"->"))^1 * (P"=>"+P"->") * paragraph)) / function(name,source)
       local f = compile_script(source)
       if f then
         return name,f(name,_G)
@@ -254,7 +255,7 @@ local srd = P
         if type(v) == 'table' then
           merge(content,v)
         else
-          table.insert(content,v)
+          table.insert(content,tonumber(v) or v)
         end
       end
 
