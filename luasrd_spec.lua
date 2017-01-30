@@ -251,7 +251,7 @@ Height: Tall
 Sum: (a,b) -> a+b
 ]]
 
-  assert.are.equal([=[
+    assert.are.equal([=[
 {
   Man = {
     Height = "Tall",
@@ -260,6 +260,8 @@ Sum: (a,b) -> a+b
   }
 }]=],dump(db))
 
+
+    assert.are.equal( 33, db.Man.Sum(11,22))
 
   end)
 

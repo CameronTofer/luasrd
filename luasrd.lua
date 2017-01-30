@@ -210,7 +210,7 @@ local srd = P
     Cg(( C(CapitalizedTitle) * ":" * C( (P(1) - (P"\n"+P"=>"+P"->"))^1 * (P"=>"+P"->") * paragraph)) / function(name,source)
       local f = compile_script(source)
       if f then
-        return name,f(name,_G)
+        return name,f(name,_G)()
       end
       return name,source
     end) +
