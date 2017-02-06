@@ -6,7 +6,7 @@ p()
 
 test()
 {
-  busted --suppress-pending .
+  busted --suppress-pending --no-keep-going .
 }
 
 test &

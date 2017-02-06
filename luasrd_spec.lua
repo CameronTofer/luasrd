@@ -346,7 +346,7 @@ myfunc: (x) ->
   1 + (3 * x)
 ]]
 
-    assert.are.equal( 10, dump(db) )
+    assert.are.equal( 10, db.Test.myfunc(3) )
 
   end)
 
