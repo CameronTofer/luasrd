@@ -29,6 +29,20 @@ describe("an srd", function()
     assert.is_not_nil(err)
   end)
 
+  it("can have empty lines before sections", function()
+    local db, env, err = srd('\n\n1.1 Hello\n')
+    assert.is_nil(err)
+    assert.is_not_nil(db)
+    assert.is_not_nil(env)
+  end)
+
+  it("doesn't have to have a new line at the end", function()
+    local db, env, err = srd('1.1 Hello')
+    assert.is_nil(err)
+    assert.is_not_nil(db)
+    assert.is_not_nil(env)
+  end)
+
   --
   it("has sections to organize content", function()
 

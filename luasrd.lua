@@ -6,9 +6,9 @@ local env
 
 local srd = re.compile([[
 
-  all <- {| block* |} -> group {}
+  all <- %nl* {| block* |} -> group {}
 
-  block <- ({: {:index: index:} " " {title} %nl+
+  block <- ({: {:index: index:} " " {title} %nl*
             {| ((&(=index "." index) block) / rows  / method / prop / parse / &!index (&.)->'' line)* |} -> group
             :})
 
