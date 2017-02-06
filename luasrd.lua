@@ -9,9 +9,10 @@ local srd = re.compile([[
   all <- %nl* {| block* |} -> group {}
 
   block <- ({: {:index: index:} " " {title} %nl*
-            {| ((&(=index "." index) block) / rows  / method / prop / parse / &!index (&.)->'' line)* |} -> group
+            {| ((&(=index "." index) block) / rows  / method / prop / parse / &!heading (&.)->'' line)* |} -> group
             :})
 
+  heading <- index " " title
   index <- %d+("."%d+)*
   title <- %a+ (os [%d%a]+)*
   line <- {[^%nl]*} %nl+
@@ -28,7 +29,7 @@ local srd = re.compile([[
 
   method <- {captitle} ":" {os ('(' [^')']* ')')? os ('->'/'=>') rol ('  ' rol)*} -> code
 
-  parse <- (&.)->'-parse' sm (( &!(index/sm) rol)*) -> code sm?
+  parse <- (&.)->'-parse' sm (( &!(heading/sm) rol)*) -> code sm?
   sm <- '---' %nl+
 
   rol <- [^%nl]* %nl+
@@ -42,6 +43,7 @@ local srd = re.compile([[
       local k = all[i]
       local v = all[i+1]
       if k == '-parse' then
+        assert(v)
         r = v(k)(r)
       elseif type(v) == 'function' then
         r[k] = v(k)
