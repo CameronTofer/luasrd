@@ -18,7 +18,7 @@ local srd = re.compile([[
 
   prop <- {captitle} ":" os line
   captitle <- capword (os capword)*
-  capword <- [A-Z]%a+ / %d%a%a / %a%a
+  capword <- [A-Z]%a+ / %d%a%a / %a%a%a
 
   rows <- {| row rowdiv? row+ |} -> columns
   rowdiv <- ((os [|-])+ %nl)
@@ -41,7 +41,6 @@ local srd = re.compile([[
     for i=1,#all,2 do
       local k = all[i]
       local v = all[i+1]
-
       if k == '-parse' then
         r = v(k)(r)
       elseif type(v) == 'function' then
