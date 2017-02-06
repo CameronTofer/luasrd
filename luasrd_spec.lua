@@ -1,7 +1,8 @@
 local describe = describe
 local it = it
 
-local srd = require 'luasrd'
+--local srd = require './luasrd'
+local srd = loadfile('luasrd.lua')()
 local serpent = require 'serpent'
 
 local function dump(var)
@@ -13,28 +14,31 @@ describe("an srd", function()
 
   --
   it("can be empty",function()
-    local db, err = srd('')
+    local db, env, err = srd('')
     assert.is_not_nil(db)
+    assert.is_not_nil(env)
     assert.is_nil(err)
     assert.are.equal(0, #db)
   end)
 
   --
   it("must have sections", function()
-    local db, err = srd('hello')
+    local db, env, err = srd('hello')
     assert.is_nil(db)
+    assert.is_nil(env)
     assert.is_not_nil(err)
   end)
 
   --
   it("has sections to organize content", function()
 
-    local db, err = srd(
+    local db, env, err = srd(
 [[
 1.1 Content
 Hello World.
 ]])
 
+    assert.is_not_nil(env)
     assert.is_nil(err)
     assert.are.equal(
 [[
@@ -50,7 +54,7 @@ Hello World.
   --
   it("can have sections that have sections", function()
 
-    local db, err = srd([[
+    local db = srd([[
 1 Content
 1.1 Text
 Hello World.
@@ -73,7 +77,7 @@ Goodbye.
   --
   it("can have sections with tables", function()
 
-    local db, err = srd([[
+    local db = srd([[
 1 Content
 1.1 Data
 Number|Description
@@ -105,7 +109,7 @@ Number|Description
 
   it("can have tables with dividers", function()
 
-    local db, err = srd([[
+    local db = srd([[
 1 Content
 1.1 Data
 
@@ -137,7 +141,7 @@ Number|Description
 
   it("can have tables with dividers", function()
 
-    local db, err = srd([[
+    local db = srd([[
 1 Content
 1.1 Data
 
@@ -170,7 +174,7 @@ Number|Description
 
   it("can have multiple tables per section", function()
 
-    local db,err = srd[[
+    local db = srd[[
 1.1 Sample Data
 | Index | Name |
 | 1     | poo  |
@@ -209,7 +213,7 @@ This is text
 
   it("can have script to modify contents of a section", function()
 
-    local db, err = srd[[
+    local db = srd[[
 1.1 Very Interesting Things
 Some text
 | Name | Value |
@@ -244,7 +248,7 @@ Some text
 
   it("can include functions as content", function()
 
-    local db, err = srd[[
+    local db = srd[[
 1.1 Man
 Name: Bob Wilson
 Height: Tall
@@ -268,7 +272,7 @@ Sum: (a,b) -> a+b
 
   it("can have sections within sections", function()
 
-    local db, err = srd[[
+    local db = srd[[
 1 Parent
 Name: Fiz
 1.1 Child
@@ -300,6 +304,49 @@ Name: Roger
   }
 }]=],dump(db))
 
+
+  end)
+
+
+  it("can have sections with code that parse", function()
+
+    local db = srd[[
+1 Heading
+1.1 Data
+This is one line
+This is two line
+---
+(content) ->
+  'We have ' .. #content .. ' lines.'
+]]
+
+    assert.are.equal( 'We have 2 lines.', db.Heading.Data )
+
+  end)
+
+  it("has functions that share an environment.", function()
+
+    local db, env = srd[[
+1 Test
+DoIt: -> X + 3
+]]
+
+    env.X = 4
+    assert.are.equal( 7, db.Test.DoIt() )
+    env.X = 1
+    assert.are.equal( 4, db.Test.DoIt() )
+
+  end)
+
+  it("has functions which can be multiple lines", function()
+
+    local db = srd[[
+1 Test
+myfunc: (x) ->
+  1 + (3 * x)
+]]
+
+    assert.are.equal( 10, dump(db) )
 
   end)
 

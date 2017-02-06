@@ -2,28 +2,24 @@ local lpeg = require 'lpeg'
 local parse = require 'moonscript.parse'
 local compile = require 'moonscript.compile'
 
+local env
 
-local function compile_script(moon_code)
+local function compile_script(code,name)
 
   local tree, lua_code, msg, pos
 
-  tree, msg = parse.string(moon_code)
+  tree, msg = parse.string(code)
   if not tree then
     return nil, msg
   end
 
   lua_code, msg, pos = compile.tree(tree)
   if not lua_code then
-    return nil, compile.format_error(msg,pos,moon_code)
+    return nil, compile.format_error(msg,pos,code)
   end
 
-  return function(name,env)
-    local script = load(lua_code,name,nil,env)
-    if not script then
-      return nil, 'load failed'
-    end
-    return script
-  end
+  return load(lua_code,name,nil,env)
+
 end
 
 local P, S, V, R = lpeg.P, lpeg.S, lpeg.V, lpeg.R;
@@ -40,7 +36,7 @@ local sm = P"---\n" ;
 local nt = #(V"title" + -P(1)) ;
 local Name = (locale.alpha + P "_") * (locale.alnum + P "_")^0 ;
 
-local line = ((P(1) - P "\n" )^1) * (P "\n"^1 + -P(1));
+local line = ((P(1) - P "\n" )^0) * (P "\n"^1 + -P(1));
 local paragraph = line * (('\9'+P"  ") * line)^0 ;
 
 
@@ -208,9 +204,10 @@ local srd = P
   property =
 
     Cg(( C(CapitalizedTitle) * ":" * C( (P(1) - (P"\n"+P"=>"+P"->"))^1 * (P"=>"+P"->") * paragraph)) / function(name,source)
-      local f = compile_script(source)
+
+      local f = compile_script(source,name)
       if f then
-        return name,f(name,_G)()
+        return name,f()
       end
       return name,source
     end) +
@@ -250,7 +247,7 @@ local srd = P
     for _,v in pairs(contents) do
 
       if type(v) == 'function' then
-        content = v(name,_G)()(content)
+        content = v()(content)
       else
         if type(v) == 'table' then
           merge(content,v)
@@ -268,16 +265,18 @@ local srd = P
 
 return function(source)
 
-  local r,ep = lpeg.match(srd,source)
+  env = {}
+
+  local db,ep = lpeg.match(srd,source)
 
   if ep <= #source then
     local ok = source:sub(1,ep)
     local lineNumber = select(2,ok:gsub('\n','\n')) + 1
     local column = #ok:gsub('.*\n','') - 1
-    return nil, 'script:'..lineNumber..':'..column..': syntax error\n"'..source:sub(ep) ..'"'
+    return nil, nil, 'script:'..lineNumber..':'..column..': syntax error\n"'..source:sub(ep) ..'"'
   end
 
-  return r
+  return db,env
 
 end
 
