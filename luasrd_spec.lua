@@ -242,7 +242,7 @@ This is text
 
   it("can have script to modify contents of a section", function()
 
-    local db = srd[[
+    local db,env,err = srd[[
 1.1 Very Interesting Things
 Some text
 | Name | Value |
@@ -253,6 +253,8 @@ Some text
   c.Method = (i,v) -> c.Value[i] + v
   c
 ]]
+
+  assert(not err,err)
 
   assert.are.equal([=[
 {
@@ -284,14 +286,13 @@ Height: Tall
 Sum: (a,b) -> a+b
 ]]
 
+    assert.is_not_nil(db)
     assert.are.equal([=[
 {
-  Man = {
-    Height = "Tall",
-    Name = "Bob Wilson",
-    Sum = function() --[[..skipped..]] end
-  }
-}]=],dump(db))
+  Height = "Tall",
+  Name = "Bob Wilson",
+  Sum = function() --[[..skipped..]] end
+}]=],dump(db.Man))
 
 
     assert.are.equal( 33, db.Man.Sum(11,22))
@@ -371,12 +372,118 @@ DoIt: -> X + 3
 
     local db = srd[[
 1 Test
-myfunc: (x) ->
+MyFunc: (x) ->
   1 + (3 * x)
 ]]
+    assert.are.equal( 10, db.Test.MyFunc(3) )
 
-    assert.are.equal( 10, db.Test.myfunc(3) )
+  end)
 
+
+  it("can have more than one function", function()
+
+    local db = srd[[
+1 Test
+MyFunc: (x) ->
+  1 + (11 * x)
+
+Another: ->
+  1 + 11
+]]
+    assert.are.equal( 34, db.Test.MyFunc(3) )
+    assert.are.equal( 12, db.Test.Another() )
+
+  end)
+
+  it("has functions that can be formatted with tabs", function()
+
+    local db = srd"1 Test\nMyFunc: (x) ->\n\0091 + (2 * x)\n"
+    assert.are.equals( 9, db.Test.MyFunc(4) )
+
+  end)
+
+
+  it("can have custom fields", function()
+
+    local db = srd(
+[[
+1 Test
+distance is 23 feet
+radius is 13 feet
+]],
+nil,
+[[
+{%a+} ' is ' {%d+} -> tonumber ' feet' %nl+
+]],{tonumber=tonumber})
+
+    assert.are.equals( 23, db.Test.distance )
+
+  end)
+
+
+  it("has generates errors if scripts don't compile", function()
+
+    local db,env,err = srd([[
+1 Test
+Holy heck
+
+??
+Function: =>
+  if else what the heck are we doing?
+
+]])
+
+    assert.is_nil(db)
+    assert.is_nil(env)
+    assert.is_not_nil(err)
+
+  end)
+
+
+  it("has keeps track of source in case runtime errors", function()
+
+    local db,env,err = srd([[
+1 Test
+What the heck is going to happen next?
+Function: =>
+  for k,v in pairs(nil) do
+    r[k]=v
+]], 'mytest.srd')
+
+    assert.is_nil(err)
+
+    local ok, err = pcall(db.Test.Function)
+
+    assert.are.equals( "mytest.srd:4: attempt to call global 'pairs' (a nil value)", db.__scope(err,'mytest.srd') )
+
+  end)
+
+
+  it("can determine the name of an object", function()
+
+    local db = srd[[
+1 Test
+1.1 Silly
+Hello, what am I
+]]
+
+    assert.is_not_nil(db)
+
+    assert.are.equal('Silly', db.__nameof(db.Test.Silly) )
+
+  end)
+
+  it("can have functions and sub sections in the same section",function()
+    local db = srd[[
+1 Main
+1.1 Test
+Wow: -> 1+2
+1.1.1 Silly
+Hello, fart.
+]]
+
+    assert.is_not_nil(db.Main.Test.Wow)
+    assert.is_not_nil(db.Main.Test.Silly)
   end)
 
 end)
