@@ -115,8 +115,8 @@ return function(source,sourcename,extensions,...)
 
     heading <- index " " title
     index <- %d+("."%d+)*
-    title <- %a+ (os [%d%a]+)*
-    line <- {[^%nl]*} %nl+
+    title <- [%d%a]+ (os [%d%a]+)*
+    line <- {[^%nl]+} (%nl+ / !.)
 
     prop <- {captitle} ":" os line
     captitle <- capword (os capword)*
@@ -170,7 +170,7 @@ return function(source,sourcename,extensions,...)
         return inf.index[thing]
       end,
 
-      trace = function(yes)
+      trace = function()
 
         -- split sources into lines
         inf.trace = {}
@@ -220,19 +220,6 @@ return function(source,sourcename,extensions,...)
 
       hook = function(ht)
 
-        -- see if we're in source
-        local di = debug.getinfo(2)
-        local trace = inf.trace[di.source]
-        if not trace then
-          return
-        end
-
-        -- find the level of the call stack
-        local levels = 2
-        while debug.getinfo(levels, "") do
-          levels = levels + 1
-        end
-
         local function getlocals()
           local r = {}
           local t = {}
@@ -250,35 +237,41 @@ return function(source,sourcename,extensions,...)
           return r,t
         end
 
-        local function diff(a,b)
-          local r = {}
-          for k,v in pairs(b) do
-            if b[k] ~= a[k] then
-              r[k] = v
-            end
-          end
-          return r
+        -- see if we're in source
+        local di = debug.getinfo(2)
+        local trace = inf.trace[di.source]
+        if not trace then
+          return
         end
 
-        local stack = inf.stack
-        local locals,temp
+        -- find the level of the call stack
+        local levels = 3
+        while debug.getinfo(levels, "") do
+          levels = levels + 1
+        end
 
         if ht == 'call' then
-          -- calling into function, initialize
-          stack[levels] = { locals = {}, ls = di.currentline }
+          inf.stack[levels] = { locals = {}, ls = di.currentline }
         else
 
-          local cs = stack[levels]
-          locals,temp = getlocals()
-
-          local changed = diff(cs.locals,locals)
-
-          local tl = inf.trace[di.source][cs.ls].locals
-          for k,v in pairs(changed) do
-            tl[k] = tl[k] or {}
-            table.insert(tl[k],tostring(v) or v)
+          local cs = inf.stack[levels]
+          if not cs then
+            return
           end
-          inf.trace[di.source][cs.ls].temp = temp[1]
+          local line = trace[cs.ls]
+          if not line then
+            return
+          end
+
+          local locals,temp = getlocals()
+
+          for k,v in pairs(locals) do
+            if v ~= cs.locals[k] then
+              line.locals[k] = line.locals[k] or {}
+              table.insert(line.locals[k], tostring(v) or v)
+            end
+          end
+          line.temp = temp[1]
 
           cs.locals = locals
           cs.ls = di.currentline
