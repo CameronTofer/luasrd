@@ -1,0 +1,102 @@
+%YAML 1.2
+---
+name: SRD
+file_extensions: [srd]
+scope: source.srd
+
+variables:
+  number: '(?<![\d.])\b0[xX][a-fA-F\d\.]+([pP][\-\+]?\d+)?|\b\d+(\.\d+)?([eE]-?\d+)?|\.\d+([eE]-?\d+)?'
+
+contexts:
+  main:
+    - match: ^[\d\.]+ [\w\s-/,\']+\n
+      scope: comment
+
+    - match: '[\d]+\w*'
+      scope: constant.numeric
+
+    - match: '^\s*---'
+      scope: constant.numeric
+      push: moonscript
+
+  moonscript:
+    - match: '^\s*---'
+      scope: constant.numeric
+      pop: true
+
+    - match: (?=\d+\.)
+      pop: true
+
+    - match: (--)(?!\[\[).*$\n?
+      scope: comment.line.double-dash.lua
+      captures:
+        1: punctuation.definition.comment.lua
+
+    - match: "'"
+      captures:
+        0: punctuation.definition.string.begin.lua
+      scope: string.quoted.single.lua
+      push: string_quoted_single
+
+    - match: '"'
+      captures:
+        0: punctuation.definition.string.begin.lua
+      push: string_quoted_double
+
+    - match: \b(true|false)\b
+      scope: constant.language.boolean
+
+    - match: \b(if|then|else|elseif|export|import|from|switch|when|with|using|do|for|in|while|return|local|unless|continue|break)\b
+      scope: keyword.control
+
+    - match: '{{number}}'
+      scope: constant.numeric.lua
+
+    - match: \b[A-Z]\w*\b(?!:)
+      scope: support.constant
+
+    - match: (=>|->)
+      scope: keyword.operator
+
+    - match: \b(and|or|not)\b
+      scope: keyword.operator.lua
+
+    - match: \w[a-zA-Z_]\w*\s*(?=:)
+      scope: entity.name.function
+
+    - match: \w[a-zA-Z_]\w*\s*(?==\s*?\(?.*\)?[-=]>)
+      scope: entity.name.function
+
+    - match: \(|\)|\!
+      scope: entity.name.function
+
+    - match: \+|-|%|#|\*|\/|\^|==?|~=|!=|\\|:|,|;|\.|<=?|>=?|(?<!\.)\.{2}(?!\.)
+      scope: keyword.operator.lua
+
+    - match: ({|}|\[|\])
+      scope: storage.modifier
+
+    - match: (@[a-zA-Z_]\w*)
+      scope: support.constant
+
+    - match: '@@'
+      scope: constant.language.self.class
+
+
+  string_quoted_single:
+    - meta_scope: string.quoted.single.lua
+    - match: \\.
+      scope: constant.character.escape.c
+    - match: "'"
+      captures:
+        0: punctuation.definition.string.end.lua
+      pop: true
+
+  string_quoted_double:
+    - meta_scope: string.quoted.double.lua
+    - match: \\.
+      scope: constant.character.escape.c
+    - match: '"'
+      captures:
+        0: punctuation.definition.string.end.lua
+      pop: true
