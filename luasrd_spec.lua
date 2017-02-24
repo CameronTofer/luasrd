@@ -490,4 +490,25 @@ Hello, fart.
     assert.is_not_nil(db.Main.Test.Silly)
   end)
 
+
+  pending("can debug its code", function()
+
+    local db = srd[[
+1 Test
+Silly: (X) ->
+  t = 4
+  for i=1,X
+    t = t + i
+  return t*2
+]]
+
+  db:starttrace()
+  db.Test.Silly(5)
+  local r = db:stoptrace()
+
+  assert.is_string(r)
+
+
+  end)
+
 end)

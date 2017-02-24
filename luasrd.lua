@@ -3,7 +3,7 @@ local re = require 're'
 local serpent = require 'serpent'
 
 local function dump(v)
-  return serpent.block(v,{nocode = true,comment=false})
+  return serpent.block(v,{nocode = true,comment=true})
 end
 local function p(var)
   print(dump(var))
@@ -12,7 +12,7 @@ end
 return function(source,sourcename,extensions,...)
 
   local env = {}
-  local inf = {debug = {}, index={}, sources={}}
+  local inf = {debug = {}, index={}, sources={}, toc = {}}
   local firstLineNumber = 0
 
   if sourcename == nil then
@@ -27,34 +27,54 @@ return function(source,sourcename,extensions,...)
     return lineNumber,column
   end
 
-  -- converts an array of key/values into a list
-  local function group(all)
-    local r = {}
-    for i=1,#all,2 do
-      local k = all[i]
-      local v = all[i+1]
-      if k == '-parse' then
-        assert(v)
-        r = v(k)(r)
-        k = nil
-      elseif type(v) == 'function' then
-        v = v(k)
-      elseif k == '' then
-        k = #r+1
-      end
+  -- creates a section
+  local function group(sections)
 
-      if k then
-        r[k] = v
+    local db = {}
+    local toc = {}
 
-        -- keep track of the names of things
-        if type(v) == 'table' and type(k) == 'string' then
-          inf.index[v] = k
+    -- create entries
+    for _,v in pairs(sections) do
+      local index = v[1]
+      local title = v[2]
+      local data = {}
+
+      -- create contents
+      for i=3,#v,2 do
+        local key = v[i]
+        local val = v[i+1]
+        if key == '-parse' then
+          data = val(key)(data)
+        elseif type(val) == 'function' then
+          data[key] = val(key)
+        elseif key == '' then
+          data[#data+1] = val
+        else
+          data[key] = val
         end
       end
 
+      -- toc entries
+      toc[ index ] = data
+      toc[ index ..' '.. title ] = data
+      toc[ data ] = index ..' '.. title
+
+      -- attach to parent
+      local parent = index:match('(.+)%.%d+')
+      if parent and toc[parent] then
+        toc[ parent ][title] = data
+      else
+        db[ title ] = data
+      end
+
     end
-    return r
+
+    -- create hiearchy
+
+    return db,toc
+
   end
+
 
   -- converts array of rows into a list of columns
   local function columns( rows )
@@ -107,16 +127,15 @@ return function(source,sourcename,extensions,...)
 
   local srd = re.compile([[
 
-    all <- %nl* {| block* |} -> group {}
-
-    block <- ({: {:index: index:} " " {title} %nl*
-              {| ((&(=index "." index) block) / rows  / %extensions / method / prop / parse / &!heading (&.)->'' line)* |} -> group
-              :})
+    srd <- %nl* {| section* |} -> group {}
+    section <- {| {index} " " {title} %nl* contents* |}
 
     heading <- index " " title
     index <- %d+("."%d+)*
     title <- [%d%a]+ (os [%d%a]+)*
     line <- {[^%nl]+} (%nl+ / !.)
+
+    contents <- rows / %extensions / method / prop / parse / &!heading (&.)->'' line
 
     prop <- {captitle} ":" os line
     captitle <- capword (os capword)*
@@ -140,9 +159,9 @@ return function(source,sourcename,extensions,...)
   ]],{
     group=group, columns=columns, code=code, extensions=re.compile(extensions or [['&.']],...)
   })
-  local db,ep
+  local db,toc,ep
   local ok,err = pcall( function()
-    db,ep = srd:match(source)
+    db,toc,ep = srd:match(source)
 
     if ep <= #source then
       local ok = source:sub(1,ep)
@@ -156,9 +175,25 @@ return function(source,sourcename,extensions,...)
     return nil,nil,err
   end
 
+  toc.__scope = function(msg,sourcefile)
+    return msg:gsub('%[string "([%d%a%.]+:%d+)"%]:(%d+)',function(n,o)
+      local line = inf.debug[n][tonumber(o)]
+      return sourcefile..':'..(line or '0')
+    end)
+  end
+
+  toc.__nameof = function(thing)
+    return toc[thing]:match('[%d%.]+ (.*)')
+  end
+
+
+  db = setmetatable(db,{__index = toc})
+
+--[[
   if inf then
     db = setmetatable(db,{__index =
     {
+      __toc = toc,
       __inf = inf,
       __scope = function(msg,sourcefile)
         return msg:gsub('%[string "([%d%a%.]+:%d+)"%]:(%d+)',function(n,o)
@@ -170,51 +205,70 @@ return function(source,sourcename,extensions,...)
         return inf.index[thing]
       end,
 
-      trace = function()
+      starttrace = function(self)
 
         -- split sources into lines
         inf.trace = {}
         inf.stack = {}
+        inf.ignored = {}
         for k,v in pairs(inf.sources) do
           local r = {}
-          for line in v:gmatch('([^\n]*)\n') do
+          for line in v:gmatch('([^\n]*)\n?') do
             r[#r+1] = {line=line,locals={}}
           end
           inf.trace[k]=r
         end
 
+        debug.sethook(self.hook,'crl')
+
+      end,
+
+      stoptrace = function(self)
+        debug.sethook()
+        return self.render()
       end,
 
       render = function()
 
+        local r = {}
+        local function write(...)
+          local t = ...
+          if t then
+            r[#r+1] = ...
+            return write(select(2,...))
+          end
+        end
+
         for name,src in pairs(inf.trace) do
 
-          io.write('-- ',name,'\n')
+          write('-- ',name,'\n')
 
           for _,line in pairs(src) do
 
             local source = line.line
             local printed = false
             for k,v in pairs(line.locals) do
-              io.write(string.format('%s  -- %s = %s\n',source,k,table.concat(v,' | ')))
+              write(string.format('%-24s  -- %s = %s\n',source,k,table.concat(v,' | ')))
               source = ''
               printed = true
             end
 
             if not printed then
               if line.temp then
-                io.write(string.format('%s  -- %s\n',source,line.temp))
+                write(string.format('%-24s  -- %s\n',source,line.temp))
               else
-                io.write(source,'\n')
+                write(source,'\n')
               end
             end
 
 
           end
 
-          io.write('\n')
+          write('\n')
 
         end
+
+        return table.concat(r)
 
       end,
 
@@ -241,6 +295,7 @@ return function(source,sourcename,extensions,...)
         local di = debug.getinfo(2)
         local trace = inf.trace[di.source]
         if not trace then
+          inf.ignored[di.source] = true
           return
         end
 
@@ -252,36 +307,28 @@ return function(source,sourcename,extensions,...)
 
         if ht == 'call' then
           inf.stack[levels] = { locals = {}, ls = di.currentline }
-        else
-
-          local cs = inf.stack[levels]
-          if not cs then
-            return
-          end
-          local line = trace[cs.ls]
-          if not line then
-            return
-          end
-
-          local locals,temp = getlocals()
-
-          for k,v in pairs(locals) do
-            if v ~= cs.locals[k] then
-              line.locals[k] = line.locals[k] or {}
-              table.insert(line.locals[k], tostring(v) or v)
-            end
-          end
-          line.temp = temp[1]
-
-          cs.locals = locals
-          cs.ls = di.currentline
-
         end
 
+        local cs = inf.stack[levels]
+        local line = trace[cs.ls]
+        local locals,temp = getlocals()
+
+        for k,v in pairs(locals) do
+          if v ~= cs.locals[k] then
+            line.locals[k] = line.locals[k] or {}
+            table.insert(line.locals[k], tostring(v) or v)
+          end
+        end
+        line.temp = temp[1]
+
+        cs.locals = locals
+        cs.ls = di.currentline
 
       end,
     }})
   end
+]]--
+
 
   return db,env
 
