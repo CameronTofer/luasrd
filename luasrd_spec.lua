@@ -46,6 +46,14 @@ describe("an srd", function()
       local db, env, err = srd('10 1st Things First\nHello World.')
       assert.is_nil(err)
     end)
+    it("can have subsections that are only grandchild with no parents", function()
+      local db, env, err = srd[[
+10 Hello
+10.1.1.1.1 Silly
+Hello!!]]
+      assert.is_nil(err)
+      assert.is_not_nil(db.Hello.Silly)
+    end)
   end)
 
   it("can have empty lines before sections", function()

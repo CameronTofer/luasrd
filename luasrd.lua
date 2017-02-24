@@ -60,12 +60,29 @@ return function(source,sourcename,extensions,...)
       toc[ data ] = index ..' '.. title
 
       -- attach to parent
-      local parent = index:match('(.+)%.%d+')
-      if parent and toc[parent] then
-        toc[ parent ][title] = data
-      else
-        db[ title ] = data
+      local function attach(child)
+        local parentIndex = child:match('(.+)%.%d+')
+        if not parentIndex then
+          db[ title ] = data
+          return
+        end
+        local parent = toc[parentIndex]
+        if parent then
+
+          -- add a key into parent's data to point to child
+          parent[title] = data
+
+          -- update the parent's children list in the toc
+          local children = toc[ '#'..toc[parent] ] or {}
+          children[#children+1] = data
+          toc[ '#'..toc[parent] ] = children
+
+          return
+        end
+        return attach(parentIndex)
       end
+
+      attach(index)
 
     end
 
@@ -186,6 +203,9 @@ return function(source,sourcename,extensions,...)
     return toc[thing]:match('[%d%.]+ (.*)')
   end
 
+  toc.childrenOf = function(data)
+    return toc[ '#'..toc[data] ]
+  end
 
   db = setmetatable(db,{__index = toc})
 
